@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
+import 'package:mixin_bot_sdk_dart/mixin_bot_sdk_dart.dart' as sdk;
 
 import 'vo/action.dart';
 import 'vo/asset.dart';
@@ -11,14 +14,90 @@ import 'vo/pair.dart';
 import 'vo/transaction.dart';
 import 'vo/uni_response.dart';
 
-// const uniSwapBaseUrl = 'https://api.4swap.org/api';
-const uniSwapBaseUrl = 'https://mtgswap-api.fox.one/api';
+const uniSwapBaseUrl0 = 'https://mtgswap-api.fox.one/api';
+const uniSwapBaseUrl1 = 'https://api.4swap.org/api';
+const _kRetryExtraKey = 'retry';
 
 class Client {
-  Client(BaseOptions? dioOptions) {
+  Client({
+    String? userId,
+    String? sessionId,
+    String? privateKey,
+    String? scp,
+    String? baseUrl,
+    String? accessToken,
+    BaseOptions? dioOptions,
+    Iterable<Interceptor> interceptors = const [],
+  }) {
     _dio = Dio(dioOptions);
-    _dio.options.baseUrl = uniSwapBaseUrl;
-    // _dio.interceptors.add(LogInterceptor());
+    _dio.options.baseUrl = baseUrl ?? uniSwapBaseUrl0;
+    _dio.options.responseType = ResponseType.json;
+    _dio.interceptors.addAll(interceptors);
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (
+          RequestOptions options,
+          RequestInterceptorHandler handler,
+        ) async {
+          var body = '';
+          if (options.data != null) {
+            body = jsonEncode(options.data);
+          }
+
+          final authToken = accessToken ??
+              sdk.signAuthTokenWithEdDSA(
+                userId,
+                sessionId,
+                privateKey,
+                scp,
+                options.method,
+                options.path,
+                body,
+              );
+          options.headers['Authorization'] = 'Bearer $authToken';
+          handler.next(options);
+        },
+        onError: (DioError e, ErrorInterceptorHandler handler) async {
+          if (!{uniSwapBaseUrl0, uniSwapBaseUrl1}
+              .contains(_dio.options.baseUrl)) {
+            return handler.next(e);
+          }
+          if ((e.requestOptions.extra[_kRetryExtraKey] as bool?) ?? false) {
+            return handler.next(e);
+          }
+          // if (e is MixinApiError && (e.error as MixinError).code < 500) {
+          //   return handler.next(e);
+          // }
+
+          _dio.options.baseUrl = _dio.options.baseUrl == uniSwapBaseUrl0
+              ? uniSwapBaseUrl1
+              : uniSwapBaseUrl0;
+
+          try {
+            final response = await _dio.request<dynamic>(
+              e.requestOptions.path,
+              data: e.requestOptions.data,
+              queryParameters: e.requestOptions.queryParameters,
+              cancelToken: e.requestOptions.cancelToken,
+              options: Options(
+                method: e.requestOptions.method,
+                headers: e.requestOptions.headers,
+                responseType: e.requestOptions.responseType,
+                contentType: e.requestOptions.contentType,
+                extra: <String, dynamic>{
+                  _kRetryExtraKey: true,
+                },
+              ),
+              onSendProgress: e.requestOptions.onSendProgress,
+              onReceiveProgress: e.requestOptions.onReceiveProgress,
+            );
+            return handler.resolve(response);
+          } catch (error) {
+            return handler.reject(error is DioError ? error : e);
+          }
+        },
+      ),
+    );
   }
   late Dio _dio;
 

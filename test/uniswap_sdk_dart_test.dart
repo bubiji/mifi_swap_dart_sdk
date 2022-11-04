@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('apis', () {
-    final client = Client(null);
+    final client = Client();
     final base = 'c94ac88f-4671-3976-b60a-09064f1811e8';
     final quote = 'f5ef6b5d-cc5a-3d90-b2c0-a2fd386e7a3c';
     test('test read asset', () async {
