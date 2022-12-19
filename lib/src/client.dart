@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:mixin_bot_sdk_dart/mixin_bot_sdk_dart.dart' as sdk;
 
+import 'auth.dart';
 import 'vo/action.dart';
 import 'vo/asset.dart';
 import 'vo/auth.dart';
@@ -45,7 +45,7 @@ class Client {
           }
 
           final authToken = accessToken ??
-              sdk.signAuthTokenWithEdDSA(
+              signAuthTokenWithEdDSA(
                 userId,
                 sessionId,
                 privateKey,
